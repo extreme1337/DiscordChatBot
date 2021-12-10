@@ -5,6 +5,8 @@ import json
 import random
 from replit import db
 from keep_alive import keep_alive
+import asyncio
+import time
 
 gmessages = joined = 0
 
@@ -17,6 +19,25 @@ starter_encouragements = [
   "Hang in there.",
   "You are a great person / bot!"
 ]
+
+async def update_stats():
+  await client.wait_until_ready()
+  global gmessages, joined
+
+  while not client.is_closed():
+    try:
+      with open("stats.txt", "a") as f:
+        f.write(f"Time: {int(time.time())}, Messages: {gmessages}, Members Joined: {joined}\n")
+
+        gmessages = 0
+        joined = 0
+
+        await asyncio.sleep(10000)
+    except Exception as e:
+      print(e)
+      await asyncio.sleep(10000)
+
+
 
 if "responding" not in db.keys():
   db["responding"] = True
@@ -44,9 +65,24 @@ def delete_encouragement(index):
 
 @client.event
 async def on_member_join(member):
+  global joined
+  joined = joined + 1
   for channel in member.guild.channels:
     if str(channel) == "general":
       await channel.send_message(f"""Welcome to the server {member.mention}""")
+
+
+
+@client.event
+async def on_member_update(before, after):
+  n = after.nick
+  if n:
+    if n.lower().count("tim") > 0:
+      last = before.nick
+      if last:
+        await after.edit(nick=last)
+      else:
+        await after.edit(nick="NO STOP THAT")
 
 
 @client.event
@@ -76,6 +112,19 @@ async def on_message(message):
     quote = get_quote()
     await message.channel.send(quote)
 
+
+  bad_words = ["bad", "stop", "45"]
+  for bad in bad_words:
+    if msg.count(bad) > 0:
+      print("A bad word was said")
+      await message.channel.purge(limit=1)
+
+  if msg == '!help':
+    embed = discord.Embed(title="Help on BOT", description="Some useful commands")
+    embed.add_field(name="!hello", value="Greets the user")
+    embed.add_field(name="!users", value="Prints number of users")
+    embed.add_field(name="$inspire", value="Quote some inspiring quote")
+    await message.channel.send(content=None, embed=embed)
 
   if db["responding"]:
     options = starter_encouragements
@@ -114,5 +163,6 @@ async def on_message(message):
       await message.channel.send("Responding is off.")
 
 keep_alive()
+client.loop.create_task(update_stats())
 client.run(os.getenv('TOKEN'))
 
